@@ -1,0 +1,124 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Real-Time Chat App</title>
+    <style>
+        body { font-family: Arial, sans-serif; max-width: 600px; margin: 40px auto; background: #f4f6f8; }
+        #join-page, #chat-page { background: #fff; padding: 20px; border-radius: 8px; box-shadow: 0 1px 4px rgba(0,0,0,0.1); }
+        #chat-page { display: none; }
+        #messageArea { list-style: none; padding: 0; height: 350px; overflow-y: auto; border: 1px solid #ddd; margin: 15px 0; }
+        #messageArea li { padding: 8px 12px; border-bottom: 1px solid #eee; }
+        .event-message { color: #777; font-style: italic; text-align: center; }
+        .chat-message .sender { font-weight: bold; color: #2b6cb0; }
+        .chat-message .time { color: #aaa; font-size: 11px; margin-left: 6px; }
+        #messageForm { display: flex; gap: 8px; }
+        #message { flex: 1; padding: 8px; }
+        button { padding: 8px 16px; background: #2b6cb0; color: white; border: none; border-radius: 4px; cursor: pointer; }
+        input, select { padding: 8px; width: 100%; box-sizing: border-box; margin-bottom: 10px; }
+        h3 { margin-top: 0; }
+    </style>
+</head>
+<body>
+
+<div id="join-page">
+    <h2>Join the Chat</h2>
+    <input type="text" id="name" placeholder="Enter your name" />
+    <select id="room">
+        <option value="general">General</option>
+        <option value="tech-talk">Tech Talk</option>
+        <option value="random">Random</option>
+    </select>
+    <button onclick="connect()">Join</button>
+</div>
+
+<div id="chat-page">
+    <h3 id="roomTitle"></h3>
+    <ul id="messageArea"></ul>
+    <form id="messageForm">
+        <input type="text" id="message" placeholder="Type a message..." autocomplete="off" />
+        <button type="submit">Send</button>
+    </form>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/sockjs-client/1.6.1/sockjs.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/stomp.js/2.3.3/stomp.min.js"></script>
+
+<script>
+    let stompClient = null;
+    let username = null;
+    let roomId = null;
+
+    async function connect() {
+        username = document.getElementById('name').value.trim();
+        roomId = document.getElementById('room').value;
+        if (!username) return;
+
+        document.getElementById('join-page').style.display = 'none';
+        document.getElementById('chat-page').style.display = 'block';
+        document.getElementById('roomTitle').textContent = 'Room: ' + roomId;
+
+        await loadHistory(roomId);
+
+        const socket = new SockJS('/ws');
+        stompClient = Stomp.over(socket);
+        stompClient.debug = null;
+
+        stompClient.connect({}, () => {
+            stompClient.subscribe('/topic/room.' + roomId, onMessageReceived);
+            stompClient.send(`/app/chat.addUser/${roomId}`, {}, JSON.stringify({ sender: username, type: 'JOIN' }));
+        });
+    }
+
+    async function loadHistory(roomId) {
+        try {
+            const res = await fetch(`/api/rooms/${roomId}/messages`);
+            const history = await res.json();
+            history.forEach(renderMessage);
+        } catch (e) {
+            console.warn('Could not load history', e);
+        }
+    }
+
+    document.getElementById('messageForm').addEventListener('submit', (event) => {
+        event.preventDefault();
+        const messageInput = document.getElementById('message');
+        const content = messageInput.value.trim();
+
+        if (content && stompClient) {
+            stompClient.send(`/app/chat.sendMessage/${roomId}`, {}, JSON.stringify({ sender: username, content, type: 'CHAT' }));
+            messageInput.value = '';
+        }
+    });
+
+    function onMessageReceived(payload) {
+        const message = JSON.parse(payload.body);
+        renderMessage(message);
+    }
+
+    function renderMessage(message) {
+        const messageArea = document.getElementById('messageArea');
+        const li = document.createElement('li');
+
+        if (message.type === 'JOIN') {
+            li.className = 'event-message';
+            li.textContent = message.sender + ' joined the chat';
+        } else if (message.type === 'LEAVE') {
+            li.className = 'event-message';
+            li.textContent = message.content;
+        } else {
+            li.className = 'chat-message';
+            const senderSpan = document.createElement('span');
+            senderSpan.className = 'sender';
+            senderSpan.textContent = message.sender + ': ';
+            li.appendChild(senderSpan);
+            li.appendChild(document.createTextNode(message.content));
+        }
+
+        messageArea.appendChild(li);
+        messageArea.scrollTop = messageArea.scrollHeight;
+    }
+</script>
+
+</body>
+</html>
