@@ -75,15 +75,3 @@ mvn test
 
 ---
 
-## Before You Put This on Your Resume or Talk About It in an Interview
-
-This project uses several concepts that are very likely to come up as follow-up questions. Make sure you can explain, in your own words:
-
-1. **Why WebSockets instead of regular HTTP requests?** (Hint: persistent connection vs. request/response, no repeated polling)
-2. **What STOMP is** and why it sits on top of the raw WebSocket protocol (structured pub/sub messaging with destinations, like `/topic/room.general`)
-3. **Why `PresenceService` uses `ConcurrentHashMap`** instead of a regular `HashMap` (multiple WebSocket sessions run on different threads — a plain HashMap isn't thread-safe under concurrent writes)
-4. **How the message flow works end to end**: browser sends to `/app/chat.sendMessage/{roomId}` → `@MessageMapping` in `ChatController` handles it → message is saved via `ChatMessageRepository` → `@SendTo` broadcasts it to everyone subscribed to `/topic/room.{roomId}`
-5. **What happens when a user disconnects** (`WebSocketEventListener` catches `SessionDisconnectEvent`, updates presence, and broadcasts a "left" message)
-6. **Why the Twilio integration is guarded by a config flag** (`twilio.enabled`) instead of always running (so the app is demoable without needing a paid/trial account, and so a third-party API failure never breaks the core chat feature — see the try/catch in `NotificationService`)
-
-If you can walk through these points confidently, this project will hold up well under interview questions. If any of them feel shaky, spend 20–30 minutes re-reading the relevant file before you list this project — that's a much better use of time than hoping it doesn't come up.
